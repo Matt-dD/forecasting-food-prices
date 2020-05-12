@@ -1,6 +1,13 @@
 ---
 title: "Forecasting Food Prices in Rwanda"
-output: html_document
+output: 
+  html_document:
+    theme: yeti
+    hightlight: pygments
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    code_folding: show
 ---
 
 ```{r setup, include=FALSE}
