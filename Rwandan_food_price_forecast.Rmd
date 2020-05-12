@@ -1,0 +1,130 @@
+---
+title: "Forecasting Food Prices in Rwanda"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(magrittr)
+library(forecast)
+```
+
+## Outline
+
+This is a time series analysis and forecast of the cost of basic food items in Rwanda, using data from <a href="https://data.humdata.org/dataset/wfp-food-prices-for-Rwanda">United Nations Humanitarian Data Exchange Global Food Price Database</a>.  Data are available for the following food crops:
+
+* Beans  
+* Cassava   
+* Chilli  
+* Maize  
+* Oranges  
+* Potatoes  
+* Peas  
+* Sorghum  
+* Tomatoes  
+
+These crops are grown across the five provinces in Rwanda, as shown in the map below.
+  
+![](/Users/mattdenni/Documents/Data Science/Projects for CV/Functions for Food Price Forecasts/Rwanda_Districts_Map.png)
+
+***
+
+### 1. Read in the food price data
+
+```{r}
+#Create a function for reading in the data
+read_price_data <- function(commodity){
+commodity_prices <- read_csv(
+  paste0("datasets/", commodity, ".csv"), #path for .csv for specified commodity
+  col_types = cols_only( #select only the relevant columns
+    adm1_name = col_character(),
+    cm_name = col_character(),
+    mp_month = col_integer(),
+    mp_year = col_integer(),
+    mp_price = col_double()
+  )
+)
+
+#Assign more appropriate names
+commodity_prices_renamed <- commodity_prices %>% 
+  rename(
+    province = adm1_name, 
+    commodity_kgs = cm_name,
+    month = mp_month,
+    year = mp_year,
+    price_rwf = mp_price #RWF = Rwandan Francs
+  )
+
+#Clean the dates
+commodity_prices_cleaned <- commodity_prices_renamed %>% 
+  mutate(
+    date = ymd(paste(year, month, "01"))
+  ) %>% 
+  select(-month, -year)
+}
+
+# Reading in the price of the specified commodity e.g. Fresh Peas
+fresh_peas <- read_price_data("Peas (fresh)")
+head(fresh_peas)
+```
+
+***
+
+### 2. Plot change in price over time for each province
+
+```{r}
+plot_price_vs_time <- function(prices, commodity){
+    prices %>% 
+  ggplot(aes(date, price_rwf, group = province, color = province)) +
+  geom_line(alpha = 0.5) +
+  labs(title = paste("Price of", commodity, "over time"),
+       x = "Date",
+       y = "Price in RWF") +
+    scale_color_discrete(name = "Province", labels = c("East", "North", "South", "West", "Kigali"))
+    }
+
+#Plotting the price of specified commodity over time e.g. fresh peas
+plot_price_vs_time(fresh_peas, "fresh peas")
+```
+
+### 3. Create a time series
+
+```{r}
+# Get the median commodity prices
+create_price_time_series <- function(prices){
+prices_summarized <- prices %>%
+  group_by(date) %>% 
+  summarize(median_price_rwf = median(price_rwf))
+
+#Create a time series of prices
+prices_time_series <- prices_summarized %$% 
+  ts(
+    median_price_rwf, 
+    start = c(year(min(date)), month(min(date))), 
+    end   = c(year(max(date)), month(max(date))), 
+    frequency = 12
+  )
+    }
+
+# Create a time series for specified commodity e.g. fresh peas
+pea_time_series <- create_price_time_series(fresh_peas)
+```
+
+### 4. Forecasting prices
+
+```{r}
+# Create a forecast plotting function
+plot_price_forecast <- function(time_series, commodity){
+price_forecast <- forecast(time_series)
+autoplot(price_forecast, 
+         main = paste("Price forecast for", commodity)) +
+        labs(x = "Date", y = "Price in RWF")
+}
+# Forecasting prices for a specified commodity e.g. fresh peas
+plot_price_forecast(pea_time_series, "fresh peas")
+```
+
